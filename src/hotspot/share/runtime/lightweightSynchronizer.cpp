@@ -125,9 +125,9 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
     const size_t max_capacity = MaxHeapSize;
     const size_t min_object_size = CollectedHeap::min_dummy_object_size() * HeapWordSize;
     const size_t max_objects = max_capacity / MAX2(MinObjAlignmentInBytes, checked_cast<int>(min_object_size));
-    const size_t log_max_objects = log2i(max_objects);
+    const size_t log_max_objects = log2i_graceful(max_objects);
 
-    return MIN2<size_t>(SIZE_BIG_LOG2, log_max_objects);
+    return MAX2(MIN2<size_t>(SIZE_BIG_LOG2, log_max_objects), min_log_size());
   }
 
   static size_t min_log_size() {
