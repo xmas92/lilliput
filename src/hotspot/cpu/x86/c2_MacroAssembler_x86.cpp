@@ -965,7 +965,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
     Label push;
 
-    const Register top = box;
+    const Register top = rax_reg;
 
     // Load the mark.
     movptr(mark, Address(obj, oopDesc::mark_offset_in_bytes()));
@@ -994,6 +994,8 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
     bind(push);
     // After successful lock, push object on lock-stack.
+    // TODO[OMWorld]: Was prepush better?
+    movl(top, Address(thread, JavaThread::lock_stack_top_offset()));
     movptr(Address(thread, top), obj);
     addl(Address(thread, JavaThread::lock_stack_top_offset()), oopSize);
     jmpb(locked);
