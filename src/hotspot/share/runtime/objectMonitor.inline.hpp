@@ -38,7 +38,7 @@
 #include "utilities/globalDefinitions.hpp"
 
 inline bool ObjectMonitor::is_entered(JavaThread* current) const {
-  if (LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER) {
+  if (LockingMode == LM_LIGHTWEIGHT) {
     if (is_owner_anonymous()) {
       return current->lock_stack().contains(object());
     } else {
@@ -54,7 +54,7 @@ inline bool ObjectMonitor::is_entered(JavaThread* current) const {
 }
 
 inline markWord ObjectMonitor::header() const {
-  assert(LockingMode != LM_PLACEHOLDER, "Placeholder locking does not use header");
+  assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight locking does not use header");
   return Atomic::load(&_header);
 }
 
@@ -67,17 +67,17 @@ inline volatile markWord* ObjectMonitor::header_addr() {
 }
 
 inline void ObjectMonitor::set_header(markWord hdr) {
-  assert(LockingMode != LM_PLACEHOLDER, "Placeholder locking does not use header");
+  assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight locking does not use header");
   Atomic::store(&_header, hdr);
 }
 
-inline intptr_t ObjectMonitor::hash_placeholder() const {
-  assert(LockingMode == LM_PLACEHOLDER, "Only used by placeholder locking");
+inline intptr_t ObjectMonitor::hash_lightweight_locking() const {
+  assert(LockingMode == LM_LIGHTWEIGHT, "Only used by lightweight locking");
   return Atomic::load(&_header).hash();
 }
 
-inline void ObjectMonitor::set_hash_placeholder(intptr_t hash) {
-  assert(LockingMode == LM_PLACEHOLDER, "Only used by placeholder locking");
+inline void ObjectMonitor::set_hash_lightweight_locking(intptr_t hash) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "Only used by lightweight locking");
   Atomic::store(&_header, markWord::zero().copy_set_hash(hash));
 }
 

@@ -16433,7 +16433,7 @@ instruct branchLoopEnd(cmpOp cmp, rFlagsReg cr, label lbl)
 
 instruct cmpFastLock(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2, iRegPNoSp tmp3)
 %{
-  predicate(LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER);
+  predicate(LockingMode != LM_LIGHTWEIGHT);
   match(Set cr (FastLock object box));
   effect(TEMP tmp, TEMP tmp2, TEMP tmp3);
 
@@ -16449,7 +16449,7 @@ instruct cmpFastLock(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegP
 
 instruct cmpFastUnlock(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2)
 %{
-  predicate(LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER);
+  predicate(LockingMode != LM_LIGHTWEIGHT);
   match(Set cr (FastUnlock object box));
   effect(TEMP tmp, TEMP tmp2);
 
@@ -16463,40 +16463,9 @@ instruct cmpFastUnlock(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRe
   ins_pipe(pipe_serial);
 %}
 
-instruct cmpFastLockLightweight(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2)
+instruct cmpFastLockLightweight(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2, iRegPNoSp tmp3)
 %{
   predicate(LockingMode == LM_LIGHTWEIGHT);
-  match(Set cr (FastLock object box));
-  effect(TEMP tmp, TEMP tmp2);
-
-  ins_cost(5 * INSN_COST);
-  format %{ "fastlock $object,$box\t! kills $tmp,$tmp2" %}
-
-  ins_encode %{
-    __ fast_lock_lightweight($object$$Register, $box$$Register, $tmp$$Register, $tmp2$$Register);
-  %}
-
-  ins_pipe(pipe_serial);
-%}
-
-instruct cmpFastUnlockLightweight(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2)
-%{
-  predicate(LockingMode == LM_LIGHTWEIGHT);
-  match(Set cr (FastUnlock object box));
-  effect(TEMP tmp, TEMP tmp2);
-
-  ins_cost(5 * INSN_COST);
-  format %{ "fastunlock $object,$box\t! kills $tmp, $tmp2" %}
-
-  ins_encode %{
-    __ fast_unlock_lightweight($object$$Register, $box$$Register, $tmp$$Register, $tmp2$$Register);
-  %}
-
-  ins_pipe(pipe_serial);
-%}
-instruct cmpFastLockPlaceholder(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2, iRegPNoSp tmp3)
-%{
-  predicate(LockingMode == LM_PLACEHOLDER);
   match(Set cr (FastLock object box));
   effect(TEMP tmp, TEMP tmp2, TEMP tmp3);
 
@@ -16504,23 +16473,23 @@ instruct cmpFastLockPlaceholder(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp
   format %{ "fastlock $object,$box\t! kills $tmp,$tmp2,$tmp3" %}
 
   ins_encode %{
-    __ fast_lock_placeholder($object$$Register, $box$$Register, $tmp$$Register, $tmp2$$Register, $tmp3$$Register);
+    __ fast_lock_lightweight($object$$Register, $box$$Register, $tmp$$Register, $tmp2$$Register, $tmp3$$Register);
   %}
 
   ins_pipe(pipe_serial);
 %}
 
-instruct cmpFastUnlockPlaceholder(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2)
+instruct cmpFastUnlockLightweight(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2, iRegPNoSp tmp3)
 %{
-  predicate(LockingMode == LM_PLACEHOLDER);
+  predicate(LockingMode == LM_LIGHTWEIGHT);
   match(Set cr (FastUnlock object box));
-  effect(TEMP tmp, TEMP tmp2);
+  effect(TEMP tmp, TEMP tmp2, TEMP tmp3);
 
   ins_cost(5 * INSN_COST);
-  format %{ "fastunlock $object,$box\t! kills $tmp, $tmp2" %}
+  format %{ "fastunlock $object,$box\t! kills $tmp, $tmp2, $tmp3" %}
 
   ins_encode %{
-    __ fast_unlock_placeholder($object$$Register, $box$$Register, $tmp$$Register, $tmp2$$Register);
+    __ fast_unlock_lightweight($object$$Register, $box$$Register, $tmp$$Register, $tmp2$$Register, $tmp3$$Register);
   %}
 
   ins_pipe(pipe_serial);

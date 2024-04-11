@@ -23,7 +23,6 @@
  */
 
 #include "precompiled.hpp"
-#include "utilities/globalDefinitions.hpp"
 #ifndef _WINDOWS
 #include "alloca.h"
 #endif
@@ -2169,12 +2168,10 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       // Save the test result, for recursive case, the result is zero
       __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
       __ jcc(Assembler::notEqual, slow_path_lock);
-    } else if (LockingMode == LM_LIGHTWEIGHT) {
-      __ lightweight_lock(obj_reg, swap_reg, r15_thread, rscratch1, slow_path_lock);
     } else {
-      assert(LockingMode == LM_PLACEHOLDER, "must be");
+      assert(LockingMode == LM_LIGHTWEIGHT, "must be");
       __ movptr(Address(lock_reg, mark_word_offset), 0);
-      __ placeholder_lock(obj_reg, swap_reg, r15_thread, rscratch1, slow_path_lock);
+      __ lightweight_lock(obj_reg, swap_reg, r15_thread, rscratch1, slow_path_lock);
     }
     __ bind(count_mon);
     __ inc_held_monitor_count();
@@ -2314,12 +2311,9 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ cmpxchgptr(old_hdr, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       __ jcc(Assembler::notEqual, slow_path_unlock);
       __ dec_held_monitor_count();
-    } else if (LockingMode == LM_LIGHTWEIGHT) {
-      __ lightweight_unlock(obj_reg, swap_reg, r15_thread, lock_reg, slow_path_unlock);
-      __ dec_held_monitor_count();
     } else {
-      assert(LockingMode == LM_PLACEHOLDER, "must be");
-      __ placeholder_unlock(obj_reg, swap_reg, r15_thread, lock_reg, slow_path_unlock);
+      assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+      __ lightweight_unlock(obj_reg, swap_reg, r15_thread, lock_reg, slow_path_unlock);
       __ dec_held_monitor_count();
     }
 

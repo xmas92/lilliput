@@ -32,7 +32,7 @@
 
 class ObjectMonitorWorld;
 
-class PlaceholderSynchronizer : AllStatic {
+class LightweightSynchronizer : AllStatic {
 private:
   static ObjectMonitorWorld* _omworld;
 

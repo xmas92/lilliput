@@ -38,7 +38,6 @@
 #include "memory/resourceArea.hpp"
 #include "oops/klass.inline.hpp"
 #include "prims/methodHandles.hpp"
-#include "runtime/globals.hpp"
 #include "runtime/jniHandles.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -1694,11 +1693,9 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       // Save the test result, for recursive case, the result is zero
       __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
       __ jcc(Assembler::notEqual, slow_path_lock);
-    } else if (LockingMode == LM_PLACEHOLDER){
-      __ movptr(Address(lock_reg, mark_word_offset), 0);
-      __ placeholder_lock(obj_reg, swap_reg, thread, lock_reg, slow_path_lock);
     } else {
       assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+      __ movptr(Address(lock_reg, mark_word_offset), 0);
       __ lightweight_lock(obj_reg, swap_reg, thread, lock_reg, slow_path_lock);
     }
     __ bind(count_mon);
@@ -1854,9 +1851,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ cmpxchgptr(rbx, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       __ jcc(Assembler::notEqual, slow_path_unlock);
       __ dec_held_monitor_count();
-    } else if (LockingMode == LM_PLACEHOLDER) {
-      __ placeholder_unlock(obj_reg, swap_reg, thread, lock_reg, slow_path_unlock);
-      __ dec_held_monitor_count();
     } else {
       assert(LockingMode == LM_LIGHTWEIGHT, "must be");
       __ lightweight_unlock(obj_reg, swap_reg, thread, lock_reg, slow_path_unlock);
@@ -1941,7 +1935,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
     __ bind(slow_path_lock);
 
-    if (LockingMode == LM_PLACEHOLDER) {
+    if (LockingMode == LM_LIGHTWEIGHT) {
       // Reload the lock addr. Clobbered by lightweight_lock.
       __ lea(lock_reg, Address(rbp, lock_slot_rbp_offset));
     }

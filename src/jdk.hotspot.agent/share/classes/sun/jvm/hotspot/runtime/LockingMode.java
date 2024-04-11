@@ -34,7 +34,6 @@ public class LockingMode {
   private static int monitor;
   private static int legacy;
   private static int lightweight;
-  private static int placeholder;
 
   static {
     VM.registerVMInitializedObserver(
@@ -45,7 +44,6 @@ public class LockingMode {
     monitor     = db.lookupIntConstant("LM_MONITOR").intValue();
     legacy      = db.lookupIntConstant("LM_LEGACY").intValue();
     lightweight = db.lookupIntConstant("LM_LIGHTWEIGHT").intValue();
-    placeholder = db.lookupIntConstant("LM_PLACEHOLDER").intValue();
   }
 
   public static int getMonitor() {
@@ -58,9 +56,5 @@ public class LockingMode {
 
   public static int getLightweight() {
     return lightweight;
-  }
-
-  public static int getPlaceholder() {
-    return placeholder;
   }
 }

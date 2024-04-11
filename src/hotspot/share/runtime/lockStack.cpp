@@ -72,7 +72,7 @@ uint32_t LockStack::end_offset() {
 
 #ifndef PRODUCT
 void LockStack::verify(const char* msg) const {
-  assert(LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER, "never use lock-stack when light weight locking is disabled");
+  assert(LockingMode == LM_LIGHTWEIGHT, "never use lock-stack when light weight locking is disabled");
   assert((_top <= end_offset()), "lockstack overflow: _top %d end_offset %d", _top, end_offset());
   assert((_top >= start_offset()), "lockstack underflow: _top %d start_offset %d", _top, start_offset());
   if (SafepointSynchronize::is_at_safepoint() || (Thread::current()->is_Java_thread() && is_owning_thread())) {

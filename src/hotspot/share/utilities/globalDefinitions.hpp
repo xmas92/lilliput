@@ -1023,8 +1023,6 @@ enum LockingMode {
   LM_LEGACY      = 1,
   // New lightweight locking, with monitors as 2nd tier
   LM_LIGHTWEIGHT = 2,
-  // New PLACEHOLDER locking based on lightweigh, with monitors as 2nd tier using OMWorld
-  LM_PLACEHOLDER = 3
 };
 
 //----------------------------------------------------------------------------------------------------

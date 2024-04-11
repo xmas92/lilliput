@@ -2348,7 +2348,6 @@
   declare_constant(LM_MONITOR)                                            \
   declare_constant(LM_LEGACY)                                             \
   declare_constant(LM_LIGHTWEIGHT)                                        \
-  declare_constant(LM_PLACEHOLDER)                                        \
                                                                           \
   /*********************/                                                 \
   /* Matcher (C2 only) */                                                 \

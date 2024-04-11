@@ -246,7 +246,7 @@ inline InstanceKlass* JavaThread::class_to_be_initialized() const {
 }
 
 inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(monitor != nullptr, "use om_clear_monitor_cache to clear");
   assert(this == current(), "only set own thread locals");
 
@@ -254,13 +254,13 @@ inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
 }
 
 inline void JavaThread::om_clear_monitor_cache() {
-  if (LockingMode != LM_PLACEHOLDER) {
+  if (LockingMode != LM_LIGHTWEIGHT) {
     return;
   }
 
   _om_cache.clear();
 
-  LogTarget(Info, monitorinflation) lt;
+  LogTarget(Info, monitorinflation, thread) lt;
   if (!lt.is_enabled()) {
     return;
   }
@@ -273,14 +273,14 @@ inline void JavaThread::om_clear_monitor_cache() {
       _contended_inflation != 0 ||
       _wait_inflation != 0 ||
       _lock_stack_inflation != 0) {
-    log_info(monitorinflation)("Mon: %8zu Rec: %8zu CRec: %8zu Cont: %8zu Wait: %8zu Stack: %8zu Thread: %s",
-                              _unlocked_inflation,
-                              _recursive_inflation,
-                              _contended_recursive_inflation,
-                              _contended_inflation,
-                              _wait_inflation,
-                              _lock_stack_inflation,
-                              name());
+    lt.print("Mon: %8zu Rec: %8zu CRec: %8zu Cont: %8zu Wait: %8zu Stack: %8zu Thread: %s",
+             _unlocked_inflation,
+             _recursive_inflation,
+             _contended_recursive_inflation,
+             _contended_inflation,
+             _wait_inflation,
+             _lock_stack_inflation,
+             name());
   }
   _unlocked_inflation            = 0;
   _recursive_inflation           = 0;
@@ -291,10 +291,10 @@ inline void JavaThread::om_clear_monitor_cache() {
 
   if (_wait_deflation != 0 ||
       _exit_deflation != 0) {
-    log_info(monitorinflation)("Wait: %8zu Exit: %8zu Thread: %s",
-                              _wait_deflation,
-                              _exit_deflation,
-                              name());
+    lt.print("Wait: %8zu Exit: %8zu Thread: %s",
+             _wait_deflation,
+             _exit_deflation,
+             name());
   }
   _wait_deflation = 0;
   _exit_deflation = 0;
@@ -303,10 +303,10 @@ inline void JavaThread::om_clear_monitor_cache() {
       _unlock_lookup != 0) {
     const double lock_hit_rate = (double)_lock_hit / (double)_lock_lookup * 100;
     const double unlock_hit_rate = (double)_unlock_hit / (double)_unlock_lookup * 100;
-    log_info(monitorinflation)("Lock: %3.2lf %% [%6zu / %6zu] Unlock: %3.2lf %% [%6zu / %6zu] Thread: %s",
-                              lock_hit_rate, _lock_hit, _lock_lookup,
-                              unlock_hit_rate, _unlock_hit, _unlock_lookup,
-                              name());
+    lt.print("Lock: %3.2lf %% [%6zu / %6zu] Unlock: %3.2lf %% [%6zu / %6zu] Thread: %s",
+             lock_hit_rate, _lock_hit, _lock_lookup,
+             unlock_hit_rate, _unlock_hit, _unlock_lookup,
+             name());
   }
   _lock_hit = 0;
   _lock_lookup = 0;

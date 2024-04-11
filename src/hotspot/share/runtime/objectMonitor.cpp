@@ -311,7 +311,7 @@ void ObjectMonitor::ClearSuccOnSuspend::operator()(JavaThread* current) {
 }
 
 #define assert_mark_word_concistency()                                                 \
-  assert(LockingMode == LM_PLACEHOLDER || object()->mark() == markWord::encode(this),  \
+  assert(LockingMode == LM_LIGHTWEIGHT || object()->mark() == markWord::encode(this),  \
          "object mark must match encoded this: mark=" INTPTR_FORMAT                    \
          ", encoded this=" INTPTR_FORMAT, object()->mark().value(),                    \
          markWord::encode(this).value());
@@ -412,7 +412,7 @@ bool ObjectMonitor::enter(JavaThread* current) {
     return true;
   }
 
-  if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER && current->is_lock_owned((address)cur)) {
+  if (LockingMode != LM_LIGHTWEIGHT && current->is_lock_owned((address)cur)) {
     assert(_recursions == 0, "internal state error");
     _recursions = 1;
     set_owner_from_BasicLock(cur, current);  // Convert from BasicLock* to Thread*.
@@ -448,7 +448,7 @@ bool ObjectMonitor::enter(JavaThread* current) {
     // above lost the race to async deflation. Undo the work and
     // force the caller to retry.
     const oop l_object = object();
-    if (LockingMode != LM_PLACEHOLDER && l_object != nullptr) {
+    if (LockingMode != LM_LIGHTWEIGHT && l_object != nullptr) {
       // Attempt to restore the header/dmw to the object's header so that
       // we only retry once if the deflater thread happens to be slow.
       install_displaced_markword_in_object(l_object);
@@ -590,7 +590,8 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
     return false;
   }
 
-  if (LockingMode == LM_PLACEHOLDER && is_being_async_deflated()) {
+  if (LockingMode == LM_LIGHTWEIGHT && is_being_async_deflated()) {
+    // TODO[OMWorld]: Batched deflation exiting early breaks this.
     // This happens when a locked monitor is deflated by a java thread
     // returning itself to fast_locked
     assert(is_owner_anonymous(), "must stay anonymous when the java thread deflates");
@@ -664,8 +665,8 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
     }
   }
 
-  if (LockingMode == LM_PLACEHOLDER) {
-    PlaceholderSynchronizer::deflate_monitor(current, obj, this);
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    LightweightSynchronizer::deflate_monitor(current, obj, this);
   } else {
     if (obj != nullptr) {
       // Install the old mark word if nobody else has already done it.
@@ -680,7 +681,7 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
 
 bool ObjectMonitor::deflate_anon_monitor(JavaThread* current) {
   assert(owner_raw() == current, "must be");
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
 
   LockStack& lock_stack = current->lock_stack();
 
@@ -735,7 +736,7 @@ bool ObjectMonitor::deflate_anon_monitor(JavaThread* current) {
 
   oop obj = object();
 
-  PlaceholderSynchronizer::deflate_anon_monitor(current, obj, this);
+  LightweightSynchronizer::deflate_anon_monitor(current, obj, this);
 
   // We are deflated, restore the correct lock_stack
   lock_stack.push(obj);
@@ -755,7 +756,7 @@ bool ObjectMonitor::deflate_anon_monitor(JavaThread* current) {
 // monitor and by other threads that have detected a race with the
 // deflation process.
 void ObjectMonitor::install_displaced_markword_in_object(const oop obj) {
-  assert(LockingMode != LM_PLACEHOLDER, "Placeholder has no dmw");
+  assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight has no dmw");
   // This function must only be called when (owner == DEFLATER_MARKER
   // && contentions <= 0), but we can't guarantee that here because
   // those values could change when the ObjectMonitor gets moved from
@@ -1283,7 +1284,7 @@ void ObjectMonitor::UnlinkAfterAcquire(JavaThread* current, ObjectWaiter* curren
 void ObjectMonitor::exit(JavaThread* current, bool not_suspended) {
   void* cur = owner_raw();
   if (current != cur) {
-    if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER && current->is_lock_owned((address)cur)) {
+    if (LockingMode != LM_LIGHTWEIGHT && current->is_lock_owned((address)cur)) {
       assert(_recursions == 0, "invariant");
       set_owner_from_BasicLock(cur, current);  // Convert from BasicLock* to Thread*.
       _recursions = 0;
@@ -1498,7 +1499,7 @@ intx ObjectMonitor::complete_exit(JavaThread* current) {
 
   void* cur = owner_raw();
   if (current != cur) {
-    if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER && current->is_lock_owned((address)cur)) {
+    if (LockingMode != LM_LIGHTWEIGHT && current->is_lock_owned((address)cur)) {
       assert(_recursions == 0, "internal state error");
       set_owner_from_BasicLock(cur, current);  // Convert from BasicLock* to Thread*.
       _recursions = 0;
@@ -1537,7 +1538,7 @@ bool ObjectMonitor::check_owner(TRAPS) {
   if (cur == current) {
     return true;
   }
-  if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER && current->is_lock_owned((address)cur)) {
+  if (LockingMode != LM_LIGHTWEIGHT && current->is_lock_owned((address)cur)) {
     set_owner_from_BasicLock(cur, current);  // Convert from BasicLock* to Thread*.
     _recursions = 0;
     return true;
@@ -1779,7 +1780,7 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
 
   bool deflated = false;
 
-  if (LockingMode == LM_PLACEHOLDER && OMDeflateAfterWait && current->lock_stack().wait_was_inflated()) {
+  if (LockingMode == LM_LIGHTWEIGHT && OMDeflateAfterWait && current->lock_stack().wait_was_inflated()) {
     if (deflate_anon_monitor(current)) {
       current->_wait_deflation++;
       deflated = true;

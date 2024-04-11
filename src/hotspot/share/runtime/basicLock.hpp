@@ -44,6 +44,7 @@ class BasicLock {
     Atomic::store(&_displaced_header, header);
   }
 
+  // TODO[OMWorld]: Cleanup these names, the storage `_displaced_header` usage depends on the locking mode.
   void clear_displaced_header() {
     Atomic::store(&_displaced_header, markWord(0));
   }

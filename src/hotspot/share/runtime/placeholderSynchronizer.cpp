@@ -41,10 +41,11 @@
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/synchronizer.hpp"
 #include "utilities/concurrentHashTable.inline.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 
 //
-// Placeholder synchronization.
+// Lightweight synchronization.
 //
 // When the lightweight synchronization needs to use a monitor the link
 // between the object and the monitor is stored in a concurrent hash table
@@ -57,7 +58,7 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   struct Config {
     using Value = ObjectMonitor*;
     static uintx get_hash(Value const& value, bool* is_dead) {
-      return (uintx)value->hash_placeholder();
+      return (uintx)value->hash_lightweight_locking();
     }
     static void* allocate_node(void* context, size_t size, Value const& value) {
       return AllocateHeap(size, mtOMWorld);
@@ -103,7 +104,7 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
     LookupMonitor(ObjectMonitor* monitor) : _monitor(monitor) {}
 
     uintx get_hash() const {
-      return _monitor->hash_placeholder();
+      return _monitor->hash_lightweight_locking();
     }
 
     bool equals(ObjectMonitor** value) {
@@ -117,14 +118,12 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   };
 
   static size_t max_log_size() {
-    // TODO: Evaluate the max size, is 2 ** 21 to small.
-    //       Given the AvgMonitorsPerThreadEstimate default estimate
-    //
-    return ConcurrentTable::DEFAULT_MAX_SIZE_LOG2;
+    // TODO[OMWorld]: Evaluate the max size.
+    return SIZE_BIG_LOG2;
   }
 
   static size_t min_log_size() {
-    // TODO: Evaluate the min size, currently ~= log(AvgMonitorsPerThreadEstimate default)
+    // TODO[OMWorld]: Evaluate the min size, currently ~= log(AvgMonitorsPerThreadEstimate default)
     return 10;
   }
 
@@ -139,19 +138,19 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   }
 
   static size_t grow_hint () {
-    // TODO: Evaluate why 4 is a good grow hint.
-    //       Have seen grow hint hits when lower with a
-    //       load factor as low as 0.1. (Grow Hint = 3)
-    // TODO: Evaluate the hash code used, are large buckets
-    //       expected even with a low load factor. Or is it
-    //       something with the hashing used.
+    // TODO[OMWorld]: Evaluate why 4 is a good grow hint.
+    //                Have seen grow hint hits when lower with a
+    //                load factor as low as 0.1. (Grow Hint = 3)
+    // TODO[OMWorld]: Evaluate the hash code used, are large buckets
+    //                expected even with a low load factor. Or is it
+    //                something with the hashing used.
     return ConcurrentTable::DEFAULT_GROW_HINT;
   }
 
   static size_t log_shrink_difference() {
-    // TODO: Evaluate shrink heuristics, currently disabled by
-    //       default, and only really shrinks if AvgMonitorsPerThreadEstimate
-    //       is also set to a none default value
+    // TODO[OMWorld]: Evaluate shrink heuristics, currently disabled by
+    //                default, and only really shrinks if AvgMonitorsPerThreadEstimate
+    //                is also set to a none default value
     return 2;
   }
 
@@ -299,7 +298,7 @@ public:
        oop obj = om->object_peek();
        st->print("monitor " PTR_FORMAT " ", p2i(om));
        st->print("object " PTR_FORMAT, p2i(obj));
-       assert(obj->mark().hash() == om->hash_placeholder(), "hash must match");
+       assert(obj->mark().hash() == om->hash_lightweight_locking(), "hash must match");
        st->cr();
        return true;
     };
@@ -311,10 +310,10 @@ public:
   }
 };
 
-ObjectMonitorWorld* PlaceholderSynchronizer::_omworld = nullptr;
+ObjectMonitorWorld* LightweightSynchronizer::_omworld = nullptr;
 
-ObjectMonitor* PlaceholderSynchronizer::get_or_insert_monitor_from_table(oop object, JavaThread* current, bool try_read, bool* inserted) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+ObjectMonitor* LightweightSynchronizer::get_or_insert_monitor_from_table(oop object, JavaThread* current, bool try_read, bool* inserted) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
 
   if (try_read) {
     ObjectMonitor* monitor = read_monitor(current, object);
@@ -358,8 +357,8 @@ static void post_monitor_inflate_event(EventJavaMonitorInflate* event,
   event->commit();
 }
 
-ObjectMonitor* PlaceholderSynchronizer::get_or_insert_monitor(oop object, JavaThread* current, const ObjectSynchronizer::InflateCause cause, bool try_read) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+ObjectMonitor* LightweightSynchronizer::get_or_insert_monitor(oop object, JavaThread* current, const ObjectSynchronizer::InflateCause cause, bool try_read) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
 
   EventJavaMonitorInflate event;
 
@@ -383,26 +382,26 @@ ObjectMonitor* PlaceholderSynchronizer::get_or_insert_monitor(oop object, JavaTh
 }
 
 // Add the hashcode to the monitor to match the object and put it in the hashtable.
-ObjectMonitor* PlaceholderSynchronizer::add_monitor(JavaThread* current, ObjectMonitor* monitor, oop obj) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+ObjectMonitor* LightweightSynchronizer::add_monitor(JavaThread* current, ObjectMonitor* monitor, oop obj) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(obj == monitor->object(), "must be");
 
   intptr_t hash = obj->mark().hash();
   assert(hash != 0, "must be set when claiming the object monitor");
-  monitor->set_hash_placeholder(hash);
+  monitor->set_hash_lightweight_locking(hash);
 
   return _omworld->monitor_put_get(current, monitor, obj);
 }
 
-bool PlaceholderSynchronizer::remove_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+bool LightweightSynchronizer::remove_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(monitor->object_peek() == obj, "must be, cleared objects are removed by is_dead");
 
   return _omworld->remove_monitor_entry(current, monitor);
 }
 
-void PlaceholderSynchronizer::deflate_mark_word(oop obj) {
-  assert(LockingMode == LM_PLACEHOLDER, "must use lightweight locking");
+void LightweightSynchronizer::deflate_mark_word(oop obj) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must use lightweight locking");
 
   markWord mark = obj->mark_acquire();
   assert(!mark.has_no_hash(), "obj with inflated monitor must have had a hash");
@@ -413,26 +412,26 @@ void PlaceholderSynchronizer::deflate_mark_word(oop obj) {
   }
 }
 
-void PlaceholderSynchronizer::initialize() {
+void LightweightSynchronizer::initialize() {
   _omworld = new ObjectMonitorWorld();
 
   if (!FLAG_IS_CMDLINE(AvgMonitorsPerThreadEstimate)) {
     // This is updated after ceiling is set and ObjectMonitorWorld is created;
-    // TODO: Clean this up and find a good initial ceiling,
-    //       and initial HashTable size
+    // TODO[OMWorld]: Clean this up and find a good initial ceiling,
+    //                and initial HashTable size
     FLAG_SET_ERGO(AvgMonitorsPerThreadEstimate, 0);
   }
 }
 
-void PlaceholderSynchronizer::set_table_max(JavaThread* current) {
-  if (LockingMode != LM_PLACEHOLDER) {
+void LightweightSynchronizer::set_table_max(JavaThread* current) {
+  if (LockingMode != LM_LIGHTWEIGHT) {
     return;
   }
   _omworld->set_table_max(current);
 }
 
-bool PlaceholderSynchronizer::needs_resize(JavaThread *current) {
-  if (LockingMode != LM_PLACEHOLDER) {
+bool LightweightSynchronizer::needs_resize(JavaThread *current) {
+  if (LockingMode != LM_LIGHTWEIGHT) {
     return false;
   }
   return _omworld->needs_resize(current,
@@ -441,8 +440,8 @@ bool PlaceholderSynchronizer::needs_resize(JavaThread *current) {
                                   ObjectSynchronizer::_in_use_list.max());
 }
 
-bool PlaceholderSynchronizer::resize_table(JavaThread* current) {
-  if (LockingMode != LM_PLACEHOLDER) {
+bool LightweightSynchronizer::resize_table(JavaThread* current) {
+  if (LockingMode != LM_LIGHTWEIGHT) {
     return true;
   }
   return _omworld->resize(current,
@@ -480,13 +479,13 @@ class LockStackInflateContendedLocks : private OopClosure {
   void inflate(JavaThread* locking_thread, JavaThread* current) {
     locking_thread->lock_stack().oops_do(this);
     for (int i = 0; i < _length; i++) {
-      PlaceholderSynchronizer::
+      LightweightSynchronizer::
         inflate_fast_locked_object(_contended_oops[i], locking_thread, current, ObjectSynchronizer::inflate_cause_vm_internal);
     }
   }
 };
 
-void PlaceholderSynchronizer::ensure_lock_stack_space(JavaThread* locking_thread, JavaThread* current) {
+void LightweightSynchronizer::ensure_lock_stack_space(JavaThread* locking_thread, JavaThread* current) {
   LockStack& lock_stack = locking_thread->lock_stack();
 
   // Make room on lock_stack
@@ -522,12 +521,12 @@ public:
   }
 };
 
-void PlaceholderSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
+void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
   enter(obj, lock, locking_thread, JavaThread::current());
 }
 
-void PlaceholderSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* locking_thread, JavaThread* current) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* locking_thread, JavaThread* current) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   VerifyThreadState vts(locking_thread, current);
 
   if (obj->klass()->is_value_based()) {
@@ -538,12 +537,12 @@ void PlaceholderSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* loc
 
   if (lock != nullptr) {
     // This is cleared in the interpreter
-    // TODO: All paths should have cleared this, assert it is 0
-    //       instead of clearing it here. Should maybe only be for
-    //       c++ ObjectLocks and compiler re-lock (check this)
-    //       Also double check JNI interactions, JNI does not have
-    //       a slot, so no cache, but is there a problem if JNI first
-    //       followed by recursive monitor enter exit
+    // TODO[OMWorld]: All paths should have cleared this, assert it is 0
+    //                instead of clearing it here. Should maybe only be for
+    //                c++ ObjectLocks and compiler re-lock (check this)
+    //                Also double check JNI interactions, JNI does not have
+    //                a slot, so no cache, but is there a problem if JNI first
+    //                followed by recursive monitor enter exit
     lock->clear_displaced_header();
   }
 
@@ -563,10 +562,10 @@ void PlaceholderSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* loc
   }
 
   if (!lock_stack.is_full() && lock_stack.try_recursive_enter(obj())) {
-    // TODO: Maybe guard this by the value in the markWord (only is fast locked)
-    //       Currently this is done when exiting. Doing it early could remove,
-    //       LockStack::CAPACITY - 1 slow paths in the best case. But need to fix
-    //       some of the inflation counters for this change.
+    // TODO[OMWorld]: Maybe guard this by the value in the markWord (only is fast locked)
+    //                Currently this is done when exiting. Doing it early could remove,
+    //                LockStack::CAPACITY - 1 slow paths in the best case. But need to fix
+    //                some of the inflation counters for this change.
 
     // Recursively fast locked
     return;
@@ -624,8 +623,8 @@ void PlaceholderSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* loc
   }
 }
 
-void PlaceholderSynchronizer::exit(oop object, JavaThread* current) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+void LightweightSynchronizer::exit(oop object, JavaThread* current) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(current == Thread::current(), "must be");
 
   bool first_try = true;
@@ -685,9 +684,9 @@ retry:
   monitor->exit(current);
 }
 
-// TODO: Rename this. No idea what to call it, used by notify/notifyall/wait and jni exit
-ObjectMonitor* PlaceholderSynchronizer::inflate_locked_or_imse(oop obj, const ObjectSynchronizer::InflateCause cause, TRAPS) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+// TODO[OMWorld]: Rename this. No idea what to call it, used by notify/notifyall/wait and jni exit
+ObjectMonitor* LightweightSynchronizer::inflate_locked_or_imse(oop obj, const ObjectSynchronizer::InflateCause cause, TRAPS) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = THREAD;
 
   for(;;) {
@@ -731,8 +730,8 @@ ObjectMonitor* PlaceholderSynchronizer::inflate_locked_or_imse(oop obj, const Ob
   }
 }
 
-ObjectMonitor* PlaceholderSynchronizer::inflate_fast_locked_object(oop object, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause) {
-  assert(LockingMode == LM_PLACEHOLDER, "only used for lightweight");
+ObjectMonitor* LightweightSynchronizer::inflate_fast_locked_object(oop object, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "only used for lightweight");
   VerifyThreadState vts(locking_thread, current);
   assert(locking_thread->lock_stack().contains(object), "locking_thread must have object on its lock stack");
 
@@ -783,15 +782,15 @@ ObjectMonitor* PlaceholderSynchronizer::inflate_fast_locked_object(oop object, J
   return monitor;
 }
 
-bool PlaceholderSynchronizer::inflate_and_enter(oop object, BasicLock* lock, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause) {
-  assert(LockingMode == LM_PLACEHOLDER, "only used for lightweight");
+bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "only used for lightweight");
   VerifyThreadState vts(locking_thread, current);
   NoSafepointVerifier nsv;
 
   // Note: In some paths (deoptimization) the 'current' thread inflates and
   // enters the lock on behalf of the 'locking_thread' thread.
 
-  // Placeholder monitors require that hash codes are installed first
+  // Lightweight monitors require that hash codes are installed first
   FastHashCode(locking_thread, object);
 
   ObjectMonitor* monitor = nullptr;
@@ -941,7 +940,7 @@ bool PlaceholderSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
   return false;
 }
 
-void PlaceholderSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
+void LightweightSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
   if (obj != nullptr) {
     deflate_mark_word(obj);
   }
@@ -951,7 +950,7 @@ void PlaceholderSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMo
   }
 }
 
-void PlaceholderSynchronizer::deflate_anon_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
+void LightweightSynchronizer::deflate_anon_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
   markWord mark = obj->mark_acquire();
   assert(!mark.has_no_hash(), "obj with inflated monitor must have had a hash");
 
@@ -964,18 +963,18 @@ void PlaceholderSynchronizer::deflate_anon_monitor(Thread* current, oop obj, Obj
   assert(removed, "Should have removed the entry");
 }
 
-ObjectMonitor* PlaceholderSynchronizer::read_monitor(Thread* current, oop obj) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+ObjectMonitor* LightweightSynchronizer::read_monitor(Thread* current, oop obj) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   return _omworld->monitor_get(current, obj);
 }
 
-bool PlaceholderSynchronizer::contains_monitor(Thread* current, ObjectMonitor* monitor) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+bool LightweightSynchronizer::contains_monitor(Thread* current, ObjectMonitor* monitor) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   return _omworld->contains_monitor(current, monitor);
 }
 
-intptr_t PlaceholderSynchronizer::FastHashCode(Thread* current, oop obj) {
-  assert(LockingMode == LM_PLACEHOLDER, "must be");
+intptr_t LightweightSynchronizer::FastHashCode(Thread* current, oop obj) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
 
   markWord mark = obj->mark_acquire();
   for(;;) {

@@ -78,7 +78,7 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
   // a warning message.
   if (deflation_interval == max_intx) {
     warning("Async deflation is disabled");
-    PlaceholderSynchronizer::set_table_max(jt);
+    LightweightSynchronizer::set_table_max(jt);
     return;
   }
 
@@ -86,6 +86,7 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
   while (true) {
     bool resize = false;
     {
+      // TODO[OMWorld]: This is all being rewritten.
       // Need state transition ThreadBlockInVM so that this thread
       // will be handled by safepoint correctly when this thread is
       // notified at a safepoint.
@@ -98,7 +99,7 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
         ml.wait(time_to_wait);
 
         // Handle LightweightSynchronizer Hash Table Resizing
-        if (PlaceholderSynchronizer::needs_resize(jt)) {
+        if (LightweightSynchronizer::needs_resize(jt)) {
           resize = true;
           break;
         }
@@ -106,9 +107,9 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
     }
 
     if (resize) {
-      // TODO: Recheck this logic, especially !resize_successful and PlaceholderSynchronizer::needs_resize when is_max_size_reached == true
+      // TODO[OMWorld]: Recheck this logic, especially !resize_successful and LightweightSynchronizer::needs_resize when is_max_size_reached == true
       const intx time_since_last_deflation = checked_cast<intx>(ObjectSynchronizer::time_since_last_async_deflation_ms());
-      const bool resize_successful = PlaceholderSynchronizer::resize_table(jt);
+      const bool resize_successful = LightweightSynchronizer::resize_table(jt);
       const bool deflation_interval_passed = time_since_last_deflation >= deflation_interval;
       const bool deflation_needed = deflation_interval_passed && ObjectSynchronizer::is_async_deflation_needed();
 

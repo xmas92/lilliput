@@ -198,7 +198,7 @@ public:
 
  private:
   friend class SynchronizerTest;
-  friend class PlaceholderSynchronizer;
+  friend class LightweightSynchronizer;
 
   static intptr_t get_next_hash(Thread* current, oop obj);
 

@@ -121,11 +121,7 @@ class ObjectWaiter : public StackObj {
 //     intptr_t. There's no reason to use a 64-bit type for this field
 //     in a 64-bit JVM.
 
-#ifndef OM_CACHE_LINE_SIZE
-// Use DEFAULT_CACHE_LINE_SIZE if not already specified for
-// the current build platform.
 #define OM_CACHE_LINE_SIZE DEFAULT_CACHE_LINE_SIZE
-#endif
 
 class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
   friend class ObjectSynchronizer;
@@ -237,19 +233,20 @@ private:
   // stall so the helper macro adjusts the offset value that is returned
   // to the ObjectMonitor reference manipulation code:
   //
-  // Placeholder locking fetches ObjectMonitor references from a cache
+  // Lightweight locking fetches ObjectMonitor references from a cache
   // instead of the markWord and doesn't work with tagged values.
   //
   #define OM_OFFSET_NO_MONITOR_VALUE_TAG(f) \
-    ((in_bytes(ObjectMonitor::f ## _offset())) - (LockingMode == LM_PLACEHOLDER ? 0 : checked_cast<int>(markWord::monitor_value)))
+    ((in_bytes(ObjectMonitor::f ## _offset())) - (LockingMode == LM_LIGHTWEIGHT ? 0 : checked_cast<int>(markWord::monitor_value)))
 
   markWord           header() const;
   uintptr_t          header_value() const;
   volatile markWord* header_addr();
   void               set_header(markWord hdr);
 
-  intptr_t           hash_placeholder() const;
-  void               set_hash_placeholder(intptr_t hash);
+  // TODO[OMWorld]: Cleanup these names, the storage `_header` usage depends on the locking mode.
+  intptr_t           hash_lightweight_locking() const;
+  void               set_hash_lightweight_locking(intptr_t hash);
 
   bool is_busy() const {
     // TODO-FIXME: assert _owner == null implies _recursions = 0

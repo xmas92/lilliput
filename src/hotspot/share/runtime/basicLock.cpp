@@ -26,7 +26,6 @@
 #include "oops/oop.inline.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/synchronizer.hpp"
-#include "utilities/globalDefinitions.hpp"
 
 void BasicLock::print_on(outputStream* st, oop owner) const {
   st->print("monitor");
@@ -83,8 +82,8 @@ void BasicLock::move_to(oop obj, BasicLock* dest) {
       // we can find any flavor mark in the displaced mark.
     }
     dest->set_displaced_header(displaced_header());
-  } else if (LockingMode == LM_PLACEHOLDER) {
-    // Placeholder locking uses the displace header to store a cache which
+  } else if (LockingMode == LM_LIGHTWEIGHT) {
+    // Lightweight locking uses the displace header to store a cache which
     // must contain either an ObjectMonitor* associated with this lock or null.
     // Preserve the ObjectMonitor*, the cache is cleared when a box is reused
     // and only read while the lock is held, so no stale ObjectMonitor* is

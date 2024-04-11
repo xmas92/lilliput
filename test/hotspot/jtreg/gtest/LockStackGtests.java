@@ -30,12 +30,3 @@
  * @requires vm.flagless
  * @run main/native GTestWrapper --gtest_filter=LockStackTest* -XX:LockingMode=2
  */
-
-/* @test
- * @summary Run LockStack gtests with LockingMode=3
- * @library /test/lib
- * @modules java.base/jdk.internal.misc
- *          java.xml
- * @requires vm.flagless
- * @run main/native GTestWrapper --gtest_filter=LockStackTest* -XX:LockingMode=3
- */

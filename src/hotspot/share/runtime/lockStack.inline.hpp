@@ -211,7 +211,6 @@ inline size_t LockStack::remove(oop o) {
 }
 
 inline bool LockStack::contains(oop o) const {
-  assert(o != nullptr, "Catch me!");
   verify("pre-contains");
 
   // Can't poke around in thread oops without having started stack watermark processing.
@@ -245,7 +244,7 @@ inline void OMCache::set_monitor(ObjectMonitor *monitor) {
 
   oop obj = monitor->object_peek();
   assert(obj != nullptr, "must be alive");
-  assert(monitor == PlaceholderSynchronizer::read_monitor(JavaThread::current(), obj), "must be exist in table");
+  assert(monitor == LightweightSynchronizer::read_monitor(JavaThread::current(), obj), "must be exist in table");
 
   OMCacheEntry to_insert = {obj, monitor};
 
