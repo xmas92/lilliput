@@ -119,7 +119,15 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
 
   static size_t max_log_size() {
     // TODO[OMWorld]: Evaluate the max size.
-    return SIZE_BIG_LOG2;
+    // TODO[OMWorld]: Need to fix init order to use Universe::heap()->max_capacity();
+    //                Using MaxHeapSize directly this early may be wrong, and there
+    //                are definitely rounding errors (alignment).
+    const size_t max_capacity = MaxHeapSize;
+    const size_t min_object_size = CollectedHeap::min_dummy_object_size() * HeapWordSize;
+    const size_t max_objects = max_capacity / MAX2(MinObjAlignmentInBytes, checked_cast<int>(min_object_size));
+    const size_t log_max_objects = log2i(max_objects);
+
+    return MIN2<size_t>(SIZE_BIG_LOG2, log_max_objects);
   }
 
   static size_t min_log_size() {
