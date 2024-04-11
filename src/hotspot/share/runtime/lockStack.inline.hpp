@@ -33,14 +33,14 @@
 #include "oops/oop.inline.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/javaThread.hpp"
+#include "runtime/lightweightSynchronizer.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/stackWatermark.hpp"
 #include "runtime/stackWatermarkSet.inline.hpp"
+#include "runtime/synchronizer.hpp"
 #include "utilities/align.hpp"
 #include "utilities/globalDefinitions.hpp"
-#include "runtime/synchronizer.hpp"
-#include "runtime/placeholderSynchronizer.hpp"
 
 inline int LockStack::to_index(uint32_t offset) {
   assert(is_aligned(offset, oopSize), "Bad alignment: %u", offset);

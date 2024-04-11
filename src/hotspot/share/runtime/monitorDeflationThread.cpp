@@ -30,10 +30,10 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/java.hpp"
 #include "runtime/javaCalls.hpp"
+#include "runtime/lightweightSynchronizer.hpp"
 #include "runtime/monitorDeflationThread.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/synchronizer.hpp"
-#include "runtime/placeholderSynchronizer.hpp"
 #include "utilities/checkedCast.hpp"
 
 void MonitorDeflationThread::initialize() {

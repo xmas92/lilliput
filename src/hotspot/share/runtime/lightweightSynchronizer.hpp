@@ -22,13 +22,13 @@
  *
  */
 
-#ifndef SHARE_RUNTIME_PLACEHOLDERSYNCHRONIZER_HPP
-#define SHARE_RUNTIME_PLACEHOLDERSYNCHRONIZER_HPP
+#ifndef SHARE_RUNTIME_LIGHTWEIGHTSYNCHRONIZER_HPP
+#define SHARE_RUNTIME_LIGHTWEIGHTSYNCHRONIZER_HPP
 
 #include "memory/allStatic.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/synchronizer.hpp"
-#include "runtime/javaThread.hpp"
 
 class ObjectMonitorWorld;
 
@@ -72,4 +72,4 @@ private:
   static intptr_t FastHashCode(Thread* current, oop obj);
 };
 
-#endif // SHARE_RUNTIME_PLACEHOLDERSYNCHRONIZER_HPP
+#endif // SHARE_RUNTIME_LIGHTWEIGHTSYNCHRONIZER_HPP
