@@ -551,15 +551,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* loc
 
   LockStack& lock_stack = locking_thread->lock_stack();
 
-  if (locking_thread != current) {
-    // Relock objects from compiler thread
-    oop o = obj();
-    // Would like to fast lock here, but cannot ensure lock order
-    // Inflate the relocked lock.
-    bool entered = inflate_and_enter(o, lock, locking_thread, current, ObjectSynchronizer::inflate_cause_monitor_enter);
-    assert(entered, "relock must lock the object, without races");
-    return;
-  }
+  // TODO[OMWorld]: Cleanup locking_thread != current
 
   if (!lock_stack.is_full() && lock_stack.try_recursive_enter(obj())) {
     // TODO[OMWorld]: Maybe guard this by the value in the markWord (only is fast locked)
@@ -573,8 +565,14 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* loc
 
   if (lock_stack.contains(obj())) {
     ObjectMonitor* mon = inflate_fast_locked_object(obj(), locking_thread, current, ObjectSynchronizer::inflate_cause_monitor_enter);
-    bool entered = mon->enter(locking_thread);
-    locking_thread->om_set_monitor_cache(mon);
+    // TODO[OMWorld]: Cleanup enter_for
+    bool entered = false;
+    if (locking_thread == current) {
+      entered = mon->enter(locking_thread);
+      locking_thread->om_set_monitor_cache(mon);
+    } else {
+      entered = mon->enter_for(locking_thread);
+    }
     if (lock != nullptr) {
       lock->set_displaced_header(mon);
     }
@@ -768,7 +766,9 @@ ObjectMonitor* LightweightSynchronizer::inflate_fast_locked_object(oop object, J
   // Remove the entry from the thread's lock stack
   monitor->set_recursions(locking_thread->lock_stack().remove(object) - 1);
 
-  locking_thread->om_set_monitor_cache(monitor);
+  if (locking_thread == current) {
+    locking_thread->om_set_monitor_cache(monitor);
+  }
 
   if (cause == ObjectSynchronizer::inflate_cause_wait) {
     locking_thread->lock_stack().set_wait_was_inflated();
@@ -807,7 +807,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
     monitor = get_or_insert_monitor(object, current, cause, true /* try_read */);
   }
 
-  if (monitor->try_enter(locking_thread)) {
+  if (current == locking_thread && monitor->try_enter(locking_thread)) {
     current->om_set_monitor_cache(monitor);
     if (lock != nullptr) {
       lock->set_displaced_header(monitor);
@@ -925,7 +925,8 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
   PauseNoSafepointVerifier pnsv(&nsv);
   object = nullptr;
 
-  if (monitor->enter(locking_thread)) {
+  // TODO[OMWorld]: Fix this enter_for
+  if ((current == locking_thread && monitor->enter(locking_thread)) || monitor->enter_for(locking_thread)) {
     // Update the thread-local cache
     if (current == locking_thread) {
       current->om_set_monitor_cache(monitor);
