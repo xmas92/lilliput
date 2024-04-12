@@ -1186,14 +1186,12 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
     }
 
     if (LockingMode == LM_LIGHTWEIGHT) {
-      movptr(Address(lock_reg, mark_offset), 0);
 #ifdef _LP64
       const Register thread = r15_thread;
 #else
       const Register thread = lock_reg;
-      get_thread(thread);
 #endif
-      lightweight_lock(obj_reg, swap_reg, thread, tmp_reg, slow_case);
+      lightweight_lock(lock_reg, obj_reg, swap_reg, thread, tmp_reg, slow_case);
     } else if (LockingMode == LM_LEGACY) {
       // Load immediate 1 into swap_reg %rax
       movl(swap_reg, 1);
