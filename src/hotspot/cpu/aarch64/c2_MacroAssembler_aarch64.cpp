@@ -236,7 +236,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   // Finish fast lock unsuccessfully. MUST branch to with flag == NE
   Label slow_path;
 
-  // Clear box. TODO[OMWorld]: Is this neccesarry? May also defer this to not write twice.
+  // Clear box. TODO[OMWorld]: Is this necessary? May also defer this to not write twice.
   str(zr, Address(box, BasicLock::displaced_header_offset_in_bytes()));
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
