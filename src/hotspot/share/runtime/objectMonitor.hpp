@@ -400,6 +400,8 @@ private:
 
   // Deflation support
   bool      deflate_monitor(Thread* current, jlong previous_deflation_time, bool avoid_deflation);
+public:
+  bool      deflate_anon_monitor(JavaThread* current);
 private:
   void      install_displaced_markword_in_object(const oop obj);
 };

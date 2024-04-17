@@ -122,6 +122,8 @@ size_t MonitorList::unlink_deflated(size_t deflated_count,
   ObjectMonitor* prev = nullptr;
   ObjectMonitor* m = Atomic::load_acquire(&_head);
 
+  const bool uses_anon_deflation = LockingMode == LM_LIGHTWEIGHT && (OMDeflateAfterWait || OMDeflateAfterTimedWait ||OMDeflateBeforeExit);
+
   while (m != nullptr) {
     if (m->is_being_async_deflated()) {
       // Find next live ObjectMonitor. Batch up the unlinkable monitors, so we can
@@ -130,8 +132,10 @@ size_t MonitorList::unlink_deflated(size_t deflated_count,
       ObjectMonitor* next = m;
       // Look for at most MonitorUnlinkBatch monitors, or the number of
       // deflated and not unlinked monitors, whatever comes first.
-      assert(deflated_count >= unlinked_count, "Sanity: underflow");
-      size_t unlinked_batch_limit = MIN2<size_t>(deflated_count - unlinked_count, MonitorUnlinkBatch);
+      assert(uses_anon_deflation || deflated_count >= unlinked_count, "Sanity: underflow");
+      size_t unlinked_batch_limit = uses_anon_deflation
+                                  ? MonitorUnlinkBatch
+                                  : MIN2<size_t>(deflated_count - unlinked_count, MonitorUnlinkBatch);
       do {
         ObjectMonitor* next_next = next->next_om();
         unlinked_batch++;
@@ -170,7 +174,7 @@ size_t MonitorList::unlink_deflated(size_t deflated_count,
       }
 
       unlinked_count += unlinked_batch;
-      if (unlinked_count >= deflated_count) {
+      if (!uses_anon_deflation && unlinked_count >= deflated_count) {
         // Reached the max so bail out of the searching loop.
         // There should be no more deflated monitors left.
         break;
@@ -192,7 +196,7 @@ size_t MonitorList::unlink_deflated(size_t deflated_count,
   {
     ObjectMonitor* m = Atomic::load_acquire(&_head);
     while (m != nullptr) {
-      assert(!m->is_being_async_deflated(), "All deflated monitors should be unlinked");
+      assert(!m->is_being_async_deflated() || (uses_anon_deflation && m->is_owner_anonymous()), "All deflated monitors should be unlinked");
       m = m->next_om();
     }
   }
@@ -781,6 +785,7 @@ int ObjectSynchronizer::wait(Handle obj, jlong millis, TRAPS) {
 
   ObjectMonitor* monitor;
   if (LockingMode == LM_LIGHTWEIGHT) {
+    current->lock_stack().clear_wait_was_inflated();
     monitor = LightweightSynchronizer::inflate_locked_or_imse(obj(), inflate_cause_wait, CHECK_0);
   } else {
     // The ObjectMonitor* can't be async deflated because the _waiters
@@ -1668,6 +1673,14 @@ size_t ObjectSynchronizer::deflate_monitor_list(ObjectMonitorDeflationSafepointe
     }
     ObjectMonitor* mid = iter.next();
 
+
+    if (LockingMode == LM_LIGHTWEIGHT && mid->is_being_async_deflated()) {
+      // This happens when a locked monitor is deflated by a java thread
+      // returning itself to fast_locked
+      assert(mid->is_owner_anonymous(), "must stay anonymous when the java thread deflates");
+      continue;
+    }
+
     if (mid->deflate_monitor(current, target_time, avoid_deflation)) {
       deflated_count++;
     } else {
@@ -2056,7 +2069,7 @@ void ObjectSynchronizer::chk_in_use_list(outputStream* out, int *error_cnt_p) {
 // Check an in-use monitor entry; log any errors.
 void ObjectSynchronizer::chk_in_use_entry(ObjectMonitor* n, outputStream* out,
                                           int* error_cnt_p) {
-  if (n->owner_is_DEFLATER_MARKER()) {
+  if (n->is_being_async_deflated()) {
     // This could happen when monitor deflation blocks for a safepoint.
     return;
   }

@@ -2011,6 +2011,12 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(int, OMYields, 5, "")                                             \
                                                                             \
+  product(bool, OMDeflateAfterWait, false, "")                              \
+                                                                            \
+  product(bool, OMDeflateAfterTimedWait, false, "")                         \
+                                                                            \
+  product(bool, OMDeflateBeforeExit, false, "")                             \
+                                                                            \
   product(bool, OMCacheHitRate, false, "")                                  \
                                                                             \
   product(bool, OMRecursiveFastPath, true, "Inflated recursion check first")\
