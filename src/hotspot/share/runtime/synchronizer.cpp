@@ -1071,7 +1071,7 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
 }
 
 intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
-  // CLEANUP[Axel]: hack for LightweightSynchronizer being in different translation unit
+  // TODO[OMWorld]: hack for LightweightSynchronizer being in different translation unit
   return ::get_next_hash(current, obj);
 }
 
