@@ -170,10 +170,11 @@ public:
 
   // We currently use aggressive monitor deflation policy;
   // basically we try to deflate all monitors that are not busy.
-  static size_t deflate_idle_monitors();
+  static size_t deflate_idle_monitors(size_t target_count = 0);
 
   // Deflate idle monitors:
-  static size_t deflate_monitor_list(ObjectMonitorDeflationSafepointer* safepointer);
+  static size_t deflate_monitor_list(ObjectMonitorDeflationSafepointer* safepointer, jlong previous_deflation_time, size_t target_count);
+  static size_t in_use_list_count();
   static size_t in_use_list_ceiling();
   static void dec_in_use_list_ceiling();
   static void inc_in_use_list_ceiling();
@@ -187,6 +188,7 @@ public:
   static bool request_deflate_idle_monitors_from_wb();  // for whitebox test support
   static void set_is_async_deflation_requested(bool new_value) { _is_async_deflation_requested = new_value; }
   static jlong time_since_last_async_deflation_ms();
+  static jlong time_since_last_async_deflation_ns();
 
   // debugging
   static void audit_and_print_stats(outputStream* out, bool on_exit);

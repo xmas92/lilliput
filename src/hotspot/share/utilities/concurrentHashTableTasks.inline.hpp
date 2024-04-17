@@ -96,6 +96,12 @@ public:
     return _table_claimer.claim(start, stop);
   }
 
+  // Calculate starting values using _new_table.
+  void setup_new_table(Thread* thread) {
+    thread_owns_resize_lock(thread);
+    _table_claimer.set(DEFAULT_TASK_SIZE_LOG2, _cht->_new_table);
+  }
+
   // Calculate starting values.
   void setup(Thread* thread) {
     thread_owns_resize_lock(thread);
@@ -225,6 +231,45 @@ class ConcurrentHashTable<CONFIG, F>::GrowTask :
   void done(Thread* thread) {
     this->thread_owns_resize_lock(thread);
     BucketsOperation::_cht->internal_grow_epilog(thread);
+    this->thread_do_not_own_resize_lock(thread);
+  }
+};
+
+template <typename CONFIG, MEMFLAGS F>
+class ConcurrentHashTable<CONFIG, F>::ShrinkTask :
+  public BucketsOperation
+{
+ public:
+  ShrinkTask(ConcurrentHashTable<CONFIG, F>* cht) : BucketsOperation(cht) {
+  }
+  // Before start prepare must be called.
+  bool prepare(Thread* thread) {
+    if (!BucketsOperation::_cht->internal_shrink_prolog(
+          thread, BucketsOperation::_cht->_log2_start_size)) {
+      return false;
+    }
+    this->setup_new_table(thread);
+    return true;
+  }
+
+  // Re-sizes a portion of the table. Returns true if there is more work.
+  bool do_task(Thread* thread) {
+    size_t start, stop;
+    assert(BucketsOperation::_cht->_resize_lock_owner != nullptr,
+           "Should be locked");
+    if (!this->claim(&start, &stop)) {
+      return false;
+    }
+    BucketsOperation::_cht->internal_shrink_range(thread, start, stop);
+    assert(BucketsOperation::_cht->_resize_lock_owner != nullptr,
+           "Should be locked");
+    return true;
+  }
+
+  // Must be called after do_task returns false.
+  void done(Thread* thread) {
+    this->thread_owns_resize_lock(thread);
+    BucketsOperation::_cht->internal_shrink_epilog(thread);
     this->thread_do_not_own_resize_lock(thread);
   }
 };

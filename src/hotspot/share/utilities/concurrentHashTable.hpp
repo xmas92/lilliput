@@ -546,6 +546,7 @@ class ConcurrentHashTable : public CHeapObj<F> {
  public:
   class BulkDeleteTask;
   class GrowTask;
+  class ShrinkTask;
   class ScanTask;
 };
 

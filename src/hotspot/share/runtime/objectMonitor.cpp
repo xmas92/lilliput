@@ -276,7 +276,8 @@ ObjectMonitor::ObjectMonitor(oop object) :
   _contentions(0),
   _WaitSet(nullptr),
   _waiters(0),
-  _WaitSetLock(0)
+  _WaitSetLock(0),
+  _last_contention(_initial_last_contention)
 { }
 
 ObjectMonitor::~ObjectMonitor() {
@@ -598,7 +599,7 @@ int ObjectMonitor::TryLock(JavaThread* current) {
 //   (contentions < 0)
 // Contending threads that see that condition know to retry their operation.
 //
-bool ObjectMonitor::deflate_monitor(Thread* current) {
+bool ObjectMonitor::deflate_monitor(Thread* current, jlong previous_deflation_time, bool avoid_deflation) {
   if (is_busy()) {
     // Easy checks are first - the ObjectMonitor is busy so no deflation.
     return false;
@@ -613,6 +614,16 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
     assert(contentions() >= 0, "must be non-negative: contentions=%d", contentions());
     _contentions = INT_MIN; // minimum negative int
   } else {
+    const auto before = [&] (jlong time_a, jlong time_b) {
+      const jlong known_start = _initial_last_contention;
+      return (time_a - known_start) < (time_b - known_start);
+    };
+
+    if (avoid_deflation && before(previous_deflation_time, Atomic::load(&_last_contention))) {
+      // Skip
+      return false;
+    }
+
     // Attempt async deflation protocol.
 
     // Set a null owner to DEFLATER_MARKER to force any contending thread
@@ -893,6 +904,8 @@ void ObjectMonitor::EnterI(JavaThread* current) {
     if (TryLock(current) > 0) break;
     assert(owner_raw() != current, "invariant");
 
+    Atomic::store(&_last_contention, os::javaTimeNanos());
+
     // park self
     if (_Responsible == current) {
       current->_ParkEvent->park((jlong) recheckInterval);
@@ -1041,6 +1054,8 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
 
     {
       OSThreadContendState osts(current->osthread());
+
+      Atomic::store(&_last_contention, os::javaTimeNanos());
 
       assert(current->thread_state() == _thread_in_vm, "invariant");
 
@@ -2151,8 +2166,12 @@ PerfLongVariable * ObjectMonitor::_sync_MonExtant              = nullptr;
 // Initialization would be protected - like so many things - by
 // the MonitorCache_lock.
 
+jlong ObjectMonitor::_initial_last_contention = 0;
+
 void ObjectMonitor::Initialize() {
   assert(!InitDone, "invariant");
+
+  _initial_last_contention = os::javaTimeNanos();
 
   if (!os::is_MP()) {
     Knob_SpinLimit = 0;

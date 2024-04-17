@@ -1998,6 +1998,15 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, OMShrinkCHT, false, "")                                     \
                                                                             \
+  product(size_t, OMCHTGrowHint,4/*ConcurrentTable::DEFAULT_GROW_HINT*/, "")\
+          range(1, 10)                                                      \
+                                                                            \
+  product(double, OMLoadFactorGrow, 75.0, "")                               \
+          range(40.0, 80.0)                                                 \
+                                                                            \
+  product(double, OMLoadFactorShrink, 25.0, "")                             \
+          range(12.5, 40.0)                                                 \
+                                                                            \
   product(int, OMSpins, 20, "")                                             \
                                                                             \
   product(int, OMYields, 5, "")                                             \

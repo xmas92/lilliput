@@ -193,6 +193,8 @@ private:
   volatile int  _waiters;           // number of waiting threads
  private:
   volatile int _WaitSetLock;        // protects Wait Queue - simple spinlock
+  static jlong _initial_last_contention;
+  volatile jlong _last_contention;   // Used for deflation heuristics.
 
  public:
 
@@ -397,7 +399,7 @@ private:
   void      ExitEpilog(JavaThread* current, ObjectWaiter* Wakee);
 
   // Deflation support
-  bool      deflate_monitor(Thread* current);
+  bool      deflate_monitor(Thread* current, jlong previous_deflation_time, bool avoid_deflation);
 private:
   void      install_displaced_markword_in_object(const oop obj);
 };
