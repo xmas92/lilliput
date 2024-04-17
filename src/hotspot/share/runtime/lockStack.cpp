@@ -49,7 +49,7 @@ const int LockStack::lock_stack_top_offset =  in_bytes(JavaThread::lock_stack_to
 const int LockStack::lock_stack_base_offset = in_bytes(JavaThread::lock_stack_base_offset());
 
 LockStack::LockStack(JavaThread* jt) :
-  _top(lock_stack_base_offset), _base() {
+  _top(lock_stack_base_offset), _wait_was_inflated(false), _base() {
   // Make sure the layout of the object is compatible with the emitted code's assumptions.
   STATIC_ASSERT(sizeof(_bad_oop_sentinel) == oopSize);
   STATIC_ASSERT(sizeof(_base[0]) == oopSize);

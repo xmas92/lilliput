@@ -393,6 +393,8 @@ private:
 
   // Deflation support
   bool      deflate_monitor(Thread* current);
+public:
+  bool      deflate_anon_monitor(JavaThread* current);
 private:
   void      install_displaced_markword_in_object(const oop obj);
 };
