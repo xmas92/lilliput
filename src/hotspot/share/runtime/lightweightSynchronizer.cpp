@@ -31,6 +31,7 @@
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/oop.inline.hpp"
+#include "runtime/basicLock.inline.hpp"
 #include "runtime/globals_extension.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/lightweightSynchronizer.hpp"
@@ -542,7 +543,7 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
 
   locking_thread->inc_held_monitor_count();
 
-  lock->clear_displaced_header();
+  lock->clear_object_monitor_cache();
 
   LockStack& lock_stack = locking_thread->lock_stack();
 
@@ -551,7 +552,7 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
     ObjectMonitor* mon = inflate_fast_locked_object(obj(), locking_thread, current, ObjectSynchronizer::inflate_cause_monitor_enter);
     entered = mon->enter_for(locking_thread);
     locking_thread->om_set_monitor_cache(mon);
-    lock->set_displaced_header(mon);
+    lock->set_object_monitor_cache(mon);
   } else {
     // It is assumed that enter_for must enter on an object without contention.
     // TODO[OMWorld]: We also assume that this re-lock is on either a new never
@@ -573,7 +574,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   current->inc_held_monitor_count();
 
-  lock->clear_displaced_header();
+  lock->clear_object_monitor_cache();
 
   SpinYield spin_yield(0, 2);
   bool first_time = true;
@@ -595,7 +596,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     bool entered = false;
     entered = mon->enter(current);
     current->om_set_monitor_cache(mon);
-    lock->set_displaced_header(mon);
+    lock->set_object_monitor_cache(mon);
     assert(entered, "recursive ObjectMonitor::enter must succeed");
     return;
   }
@@ -814,7 +815,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
 
   if (monitor->try_enter(locking_thread)) {
     locking_thread->om_set_monitor_cache(monitor);
-    lock->set_displaced_header(monitor);
+    lock->set_object_monitor_cache(monitor);
     return true;
   }
 
@@ -944,7 +945,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
 
   // Update the thread-local cache
   locking_thread->om_set_monitor_cache(monitor);
-  lock->set_displaced_header(monitor);
+  lock->set_object_monitor_cache(monitor);
 
   return true;
 }
