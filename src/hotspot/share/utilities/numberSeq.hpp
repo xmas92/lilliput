@@ -26,6 +26,7 @@
 #define SHARE_UTILITIES_NUMBERSEQ_HPP
 
 #include "memory/allocation.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 /**
  **  This file contains a few classes that represent number sequence,
@@ -110,6 +111,9 @@ private:
     DefaultSeqLength = 10
   };
   void init();
+
+  NONCOPYABLE(TruncatedSeq);
+
 protected:
   double *_sequence; // buffers the last L elements in the sequence
   int     _length; // this is L

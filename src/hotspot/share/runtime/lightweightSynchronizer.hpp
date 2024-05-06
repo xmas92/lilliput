@@ -51,6 +51,7 @@ private:
  public:
   static void initialize();
 
+  static bool resize_requested(JavaThread* current);
   static bool needs_resize(JavaThread* current);
   static bool resize_table(JavaThread* current);
   static void set_table_max(JavaThread* current);

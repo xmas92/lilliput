@@ -33,6 +33,7 @@ class MonitorDeflationThread : public JavaThread {
   friend class VMStructs;
  private:
 
+  static void monitor_deflation_thread_entry_placeholder(JavaThread* thread, intx wait_time, TRAPS);
   static void monitor_deflation_thread_entry(JavaThread* thread, TRAPS);
   MonitorDeflationThread(ThreadFunction entry_point) : JavaThread(entry_point) {};
 

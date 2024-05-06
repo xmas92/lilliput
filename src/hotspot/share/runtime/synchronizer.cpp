@@ -1238,10 +1238,50 @@ void ObjectSynchronizer::owned_monitors_iterate(MonitorClosure* closure) {
   return owned_monitors_iterate_filtered(closure, all_filter);
 }
 
+static size_t _last_target_ceiling = 0;
+
+static bool monitors_used_above_threshold_placeholder(MonitorList* list) {
+  size_t ceiling = ObjectSynchronizer::in_use_list_ceiling();
+  size_t max = list->max();
+  size_t monitors_used = list->count();
+  if (monitors_used == 0) {
+    return false;
+  }
+  if (ceiling > _last_target_ceiling) {
+    _last_target_ceiling = ceiling;
+  }
+
+  if (NoAsyncDeflationProgressMax != 0 &&
+      _no_progress_cnt >= NoAsyncDeflationProgressMax) {
+    double remainder = (100.0 - MonitorUsedDeflationThreshold) / 100.0;
+    size_t new_ceiling = _last_target_ceiling / remainder + 1;
+    log_info(monitorinflation)("Too many deflations without progress; "
+                               "bumping target from " SIZE_FORMAT
+                               " to " SIZE_FORMAT, _last_target_ceiling, new_ceiling);
+    _no_progress_cnt = 0;
+    _last_target_ceiling = new_ceiling;
+  }
+
+  size_t monitor_usage = (monitors_used * 100LL) / _last_target_ceiling;
+    if (int(monitor_usage) > MonitorUsedDeflationThreshold) {
+      log_info(monitorinflation)("monitors_used=" SIZE_FORMAT ", ceiling=" SIZE_FORMAT
+                                ", monitor_usage=" SIZE_FORMAT ", threshold=%d",
+                                monitors_used, _last_target_ceiling, monitor_usage, MonitorUsedDeflationThreshold);
+      return true;
+    }
+
+    return false;
+}
+
 static bool monitors_used_above_threshold(MonitorList* list) {
   if (MonitorUsedDeflationThreshold == 0) {  // disabled case is easy
     return false;
   }
+
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    return monitors_used_above_threshold_placeholder(list);
+  }
+
   // Start with ceiling based on a per-thread estimate:
   size_t ceiling = ObjectSynchronizer::in_use_list_ceiling();
   size_t old_ceiling = ceiling;
@@ -1275,6 +1315,10 @@ static bool monitors_used_above_threshold(MonitorList* list) {
   }
 
   return false;
+}
+
+size_t ObjectSynchronizer::in_use_list_count() {
+  return _in_use_list.count();
 }
 
 size_t ObjectSynchronizer::in_use_list_ceiling() {
@@ -1377,7 +1421,11 @@ bool ObjectSynchronizer::request_deflate_idle_monitors_from_wb() {
 }
 
 jlong ObjectSynchronizer::time_since_last_async_deflation_ms() {
-  return (os::javaTimeNanos() - last_async_deflation_time_ns()) / (NANOUNITS / MILLIUNITS);
+  return time_since_last_async_deflation_ns() / (NANOUNITS / MILLIUNITS);
+}
+
+jlong ObjectSynchronizer::time_since_last_async_deflation_ns() {
+  return (os::javaTimeNanos() - last_async_deflation_time_ns());
 }
 
 static void post_monitor_inflate_event(EventJavaMonitorInflate* event,
@@ -1591,23 +1639,38 @@ ObjectMonitor* ObjectSynchronizer::inflate_impl(oop object, const InflateCause c
 // Walk the in-use list and deflate (at most MonitorDeflationMax) idle
 // ObjectMonitors. Returns the number of deflated ObjectMonitors.
 //
-size_t ObjectSynchronizer::deflate_monitor_list(ObjectMonitorDeflationSafepointer* safepointer) {
+size_t ObjectSynchronizer::deflate_monitor_list(ObjectMonitorDeflationSafepointer* safepointer, jlong previous_deflation_time, size_t target_count) {
   MonitorList::Iterator iter = _in_use_list.iterator();
   size_t deflated_count = 0;
+  size_t skipped_count = 0;
+  bool avoid_deflation = skipped_count < target_count;
+  static jlong target_time = previous_deflation_time;
+  static bool skipped_all = false;
+  if (skipped_all) {
+    target_time += (_last_async_deflation_time_ns - previous_deflation_time);
+  }
   Thread* current = Thread::current();
-
+  log_info(omworld)("TargetC: %zu", target_count);
+  log_info(omworld)("TargetT: " JLONG_FORMAT ", Duration: " JLONG_FORMAT , target_time, previous_deflation_time - target_time);
   while (iter.has_next()) {
     if (deflated_count >= (size_t)MonitorDeflationMax) {
       break;
     }
     ObjectMonitor* mid = iter.next();
-    if (mid->deflate_monitor(current)) {
+
+    if (mid->deflate_monitor(current, target_time, avoid_deflation)) {
       deflated_count++;
+    } else {
+      skipped_count++;
     }
+
+    avoid_deflation = avoid_deflation && skipped_count < target_count;
 
     // Must check for a safepoint/handshake and honor it.
     safepointer->block_for_safepoint("deflation", "deflated_count", deflated_count);
   }
+  skipped_all = !avoid_deflation;
+  log_info(omworld)("SkippedC: %zu", skipped_count);
 
   return deflated_count;
 }
@@ -1746,9 +1809,11 @@ void ObjectMonitorDeflationSafepointer::block_for_safepoint(const char* op_name,
 
 // This function is called by the MonitorDeflationThread to deflate
 // ObjectMonitors.
-size_t ObjectSynchronizer::deflate_idle_monitors() {
+size_t ObjectSynchronizer::deflate_idle_monitors(size_t target_count) {
   JavaThread* current = JavaThread::current();
   assert(current->is_monitor_deflation_thread(), "The only monitor deflater");
+
+  const jlong previous_deflation_time = _last_async_deflation_time_ns;
 
   // The async deflation request has been processed.
   _last_async_deflation_time_ns = os::javaTimeNanos();
@@ -1760,7 +1825,7 @@ size_t ObjectSynchronizer::deflate_idle_monitors() {
   log.begin();
 
   // Deflate some idle ObjectMonitors.
-  size_t deflated_count = deflate_monitor_list(&safepointer);
+  size_t deflated_count = deflate_monitor_list(&safepointer, previous_deflation_time, target_count);
 
   // Unlink the deflated ObjectMonitors from the in-use list.
   size_t unlinked_count = 0;
