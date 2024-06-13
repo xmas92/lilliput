@@ -1834,7 +1834,7 @@ bool Arguments::check_vm_args_consistency() {
   }
 #endif
 
-#if !defined(X86) && !defined(AARCH64)
+#if !defined(X86) && !defined(AARCH64) && !defined(RISCV64) && !defined(ARM) && !defined(PPC64) && !defined(S390)
   if (LockingMode == LM_LIGHTWEIGHT) {
     FLAG_SET_CMDLINE(LockingMode, LM_LEGACY);
     warning("New lightweight locking not supported on this platform");
@@ -2956,6 +2956,11 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
 #ifndef CAN_SHOW_REGISTERS_ON_ASSERT
   UNSUPPORTED_OPTION(ShowRegistersOnAssert);
 #endif // CAN_SHOW_REGISTERS_ON_ASSERT
+
+  if (UseObjectMonitorTable && LockingMode != LM_LIGHTWEIGHT) {
+    // ObjectMonitorTable requires lightweight locking.
+    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
+  }
 
   return JNI_OK;
 }
