@@ -51,6 +51,7 @@ public class CompressedClassPointersEncodingScheme {
                 "-XX:-UseCompressedOops", // keep VM from optimizing heap location
                 "-XX:+UnlockExperimentalVMOptions",
                 "-XX:" + (COH ? "+" : "-") + "UseCompactObjectHeaders",
+                "-XX:" + (COH ? "+" : "-") + "UseObjectMonitorTable",
                 "-XX:CompressedClassSpaceBaseAddress=" + forceAddress,
                 "-XX:CompressedClassSpaceSize=" + classSpaceSize,
                 "-Xmx128m",
