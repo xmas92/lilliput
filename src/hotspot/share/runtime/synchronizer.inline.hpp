@@ -22,6 +22,9 @@
  *
  */
 
+#ifndef SHARE_RUNTIME_SYNCHRONIZER_INLINE_HPP
+#define SHARE_RUNTIME_SYNCHRONIZER_INLINE_HPP
+
 #include "runtime/synchronizer.hpp"
 
 #include "runtime/lightweightSynchronizer.hpp"
@@ -37,3 +40,5 @@ ObjectMonitor* ObjectSynchronizer::read_monitor(Thread* current, oop obj, markWo
     return LightweightSynchronizer::get_monitor_from_table(current, obj);
   }
 }
+
+#endif // SHARE_RUNTIME_SYNCHRONIZER_INLINE_HPP
