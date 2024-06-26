@@ -577,7 +577,7 @@ public:
 
 bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation) {
   // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
-  const int log_spin_limit = os::is_MP() || !UseObjectMonitorTable ? LightweightFastLockingSpins : 1;
+  const int log_spin_limit = (os::is_MP() && UseObjectMonitorTable) ? LightweightFastLockingSpins : 1;
   const int log_min_safepoint_check_interval = 10;
 
   LockStack& lock_stack = current->lock_stack();
@@ -1179,7 +1179,7 @@ bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLoc
     return false;
   }
 
-const markWord mark = obj->mark();
+  const markWord mark = obj->mark();
 
 #ifndef _LP64
   // Only for 32bit which have limited support for fast locking outside the runtime.
