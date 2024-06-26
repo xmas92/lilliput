@@ -1179,14 +1179,16 @@ bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLoc
     return false;
   }
 
+const markWord mark = obj->mark();
+
+#ifndef _LP64
+  // Only for 32bit which have limited support for fast locking outside the runtime.
   if (lock_stack.try_recursive_enter(obj)) {
     // Recursive lock successful.
     current->inc_held_monitor_count();
     // Clears object monitor cache, because ?
     return true;
   }
-
-  const markWord mark = obj->mark();
 
   if (mark.is_unlocked()) {
     markWord locked_mark = mark.set_fast_locked();
@@ -1197,6 +1199,7 @@ bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLoc
       return true;
     }
   }
+#endif
 
   if (mark.has_monitor()) {
     ObjectMonitor* const monitor = UseObjectMonitorTable ? current->om_get_from_monitor_cache(obj) :
