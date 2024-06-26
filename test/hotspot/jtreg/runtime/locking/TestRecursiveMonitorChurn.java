@@ -21,19 +21,20 @@
  * questions.
  */
 
-import jdk.test.lib.process.OutputAnalyzer;
-import jdk.test.lib.process.ProcessTools;
-
-import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 /*
  * @test
  * @summary Tests that recursive locking doesn't cause excessive native memory usage
  * @library /test/lib
- * @run driver TestRecursiveMonitorChurn
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *                   -Xmx100M -XX:AsyncDeflationInterval=0 -XX:GuaranteedAsyncDeflationInterval=0
+ *                   TestRecursiveMonitorChurn
  */
+
+import jdk.test.whitebox.WhiteBox;
+import jtreg.SkippedException;
+
 public class TestRecursiveMonitorChurn {
     static class Monitor {
         public static volatile int i, j;
@@ -46,50 +47,26 @@ public class TestRecursiveMonitorChurn {
         }
     }
 
+    static final WhiteBox WB = WhiteBox.getWhiteBox();
+    static final int LM_MONITOR = 0;
+
     public static volatile Monitor monitor;
-    public static void main(String[] args) throws IOException {
-        if (args.length == 1 && args[0].equals("test")) {
-            // The actual test, in a forked JVM.
-            for (int i = 0; i < 100000; i++) {
-                monitor = new Monitor();
-                monitor.doSomething();
-            }
-            System.out.println("i + j = " + (Monitor.i + Monitor.j));
-        } else {
-            ProcessBuilder pb = ProcessTools.createTestJavaProcessBuilder(
-                    "-XX:+UnlockDiagnosticVMOptions",
-                    "-Xmx100M", "-XX:AsyncDeflationInterval=0", "-XX:GuaranteedAsyncDeflationInterval=0",
-                    "-XX:NativeMemoryTracking=summary", "-XX:+PrintNMTStatistics",
-                    "TestRecursiveMonitorChurn",
-                    "test");
-            OutputAnalyzer output = new OutputAnalyzer(pb.start());
-            output.reportDiagnosticSummary();
+    public static void main(String[] args) {
+        if (WB.getIntVMFlag("LockingMode") == LM_MONITOR) {
+            throw new SkippedException("LM_MONITOR always infaltes. Invalid test.");
+        }
+        final long pre_monitor_count = WB.getInUseMonitorCount();
+        System.out.println(" Precount = " + pre_monitor_count);
+        for (int i = 0; i < 100000; i++) {
+            monitor = new Monitor();
+            monitor.doSomething();
+        }
+        System.out.println("i + j = " + (Monitor.i + Monitor.j));
+        final long post_monitor_count = WB.getInUseMonitorCount();
+        System.out.println("Postcount = " + post_monitor_count);
 
-            output.shouldHaveExitValue(0);
-
-            // We want to see, in the final NMT printout, a committed object monitor size that is reasonably low.
-            // Like this:
-            // -           Object Monitors (reserved=208, committed=208)
-            //                             (malloc=208 #1) (at peak)
-            //
-            // Without recursive locking support, this would look more like this:
-            // -           Object Monitors (reserved=20800624, committed=20800624)
-            //                             (malloc=20800624 #100003) (at peak)
-
-            Pattern pat = Pattern.compile("- *Object Monitors.*reserved=(\\d+), committed=(\\d+).*");
-            for (String line : output.asLines()) {
-                Matcher m = pat.matcher(line);
-                if (m.matches()) {
-                    long reserved = Long.parseLong(m.group(1));
-                    long committed = Long.parseLong(m.group(2));
-                    System.out.println(">>>>> " + line + ": " + reserved + " - " + committed);
-                    if (committed > 1000) {
-                        throw new RuntimeException("Allocated too many monitors");
-                    }
-                    return;
-                }
-            }
-            throw new RuntimeException("Did not find expected NMT output");
+        if (pre_monitor_count != post_monitor_count) {
+            throw new RuntimeException("Unexpected Inflation");
         }
     }
 }
